@@ -1,22 +1,23 @@
 import React, { memo } from 'react';
-import { SIZE, isDark, samePos } from '../game/engine.js';
+import { isDark, samePos } from '../game/engine.js';
 
 const has = (list, r, c) => list.some((p) => samePos(p, [r, c]));
 
 /**
- * 12x12 wooden board. Rendered from `viewAs`'s perspective (own pieces at the bottom).
+ * Wooden board (12x12 or 10x10 — size comes from game.board). Rendered from `viewAs`'s perspective (own pieces at the bottom).
  * Purely presentational — all interaction is delegated to onSquareClick(r, c).
  */
 function Board({ game, viewAs = 'w', selected, moveTargets, blowTargets, showBlowHints, onSquareClick }) {
   const flip = viewAs === 'b';
-  const rows = [...Array(SIZE).keys()];
+  const size = game.board.length;
+  const rows = [...Array(size).keys()];
   const order = flip ? [...rows].reverse() : rows;
   const captureTargets = moveTargets.filter((m) => m.captured).map((m) => m.to);
   const quietTargets = moveTargets.filter((m) => !m.captured).map((m) => m.to);
   const last = game.lastMove;
 
   return (
-    <div className="board" role="grid" aria-label="Dam board">
+    <div className="board" role="grid" aria-label={`Dam board ${size}x${size}`} style={{ '--n': size }}>
       {order.map((r) =>
         order.map((c) => {
           const dark = isDark(r, c);

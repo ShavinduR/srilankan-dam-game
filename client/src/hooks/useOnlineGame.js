@@ -37,9 +37,9 @@ export function useOnlineGame(onToast) {
     return () => { for (const [e, h] of Object.entries(handlers)) socket.off(e, h); };
   }, []);
 
-  const findMatch = useCallback((name) => {
+  const findMatch = useCallback((name, size) => {
     if (!socket.connected) socket.connect();
-    socket.emit('findMatch', { name });
+    socket.emit('findMatch', { name, size });
     setPhase('waiting');
   }, []);
 
@@ -65,6 +65,7 @@ export function useOnlineGame(onToast) {
     clockOffset,
     nudgeAfterMs: room.nudgeAfterMs,
     turnLimitMs: room.turnLimitMs,
+    warningAfterMs: room.warningAfterMs,
     drawOfferBy: room.drawOfferBy,
     rematchVotes: room.rematchVotes,
     move: (from, to) => {

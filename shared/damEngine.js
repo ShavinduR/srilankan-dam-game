@@ -3,41 +3,52 @@
  * Imported by BOTH the React client (local play + move hints) and the
  * Node server (authoritative validation). Never mutates input state.
  *
- * Coordinates: row 0 is the top (Black's home), row 11 is the bottom (White's home).
+ * Supports 12x12 and 10x10 boards. The size is read from the board itself
+ * (board.length), so every game carries its own size.
+ *
+ * Coordinates: row 0 is the top (Black's home), row size-1 is the bottom (White's home).
  * Dark (playable) squares: (row + col) % 2 === 1.
  */
 
-export const SIZE = 12;
+export const BOARD_SIZES = [12, 10];
+export const DEFAULT_SIZE = 12;
 export const WHITE = 'w';
 export const BLACK = 'b';
-export const TURN_LIMIT_MS = 60_000;
+export const TURN_LIMIT_MS = 90_000;     // 1m30s per turn, then the player loses
+export const WARNING_AFTER_MS = 60_000;  // "You will lose in 30 seconds!"
 export const NUDGE_AFTER_MS = 30_000;
 
 const DIAGONALS = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
 export const opponent = (color) => (color === WHITE ? BLACK : WHITE);
 export const isDark = (r, c) => (r + c) % 2 === 1;
-export const inBounds = (r, c) => r >= 0 && r < SIZE && c >= 0 && c < SIZE;
+export const isValidSize = (n) => BOARD_SIZES.includes(n);
+/** Rows of pieces per side: always leaves exactly 2 empty rows in the middle (12→5, 10→4). */
+export const rowsPerSide = (size) => (size - 2) / 2;
+export const inBounds = (r, c, size) => r >= 0 && r < size && c >= 0 && c < size;
 /** White moves "up" (row decreasing), Black moves "down". */
 export const forwardDir = (color) => (color === WHITE ? -1 : 1);
-export const promotionRow = (color) => (color === WHITE ? 0 : SIZE - 1);
+export const promotionRow = (color, size) => (color === WHITE ? 0 : size - 1);
 export const samePos = (a, b) => !!a && !!b && a[0] === b[0] && a[1] === b[1];
 
-export function createInitialBoard() {
-  const board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+export function createInitialBoard(size = DEFAULT_SIZE) {
+  if (!isValidSize(size)) throw new Error(`Unsupported board size: ${size}`);
+  const rows = rowsPerSide(size);
+  const board = Array.from({ length: size }, () => Array(size).fill(null));
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
       if (!isDark(r, c)) continue;
-      if (r < 4) board[r][c] = { color: BLACK, king: false };
-      else if (r >= SIZE - 4) board[r][c] = { color: WHITE, king: false };
+      if (r < rows) board[r][c] = { color: BLACK, king: false };
+      else if (r >= size - rows) board[r][c] = { color: WHITE, king: false };
     }
   }
   return board;
 }
 
-export function createGame() {
+export function createGame(size = DEFAULT_SIZE) {
   return {
-    board: createInitialBoard(),
+    size,
+    board: createInitialBoard(size),
     turn: WHITE,
     chainFrom: null,        // [r,c] when a multi-jump is in progress (must keep jumping)
     hasMovedThisTurn: false,
@@ -58,23 +69,24 @@ const cloneBoard = (board) => board.map((row) => row.map((p) => (p ? { ...p } : 
 export function getCaptures(board, r, c) {
   const piece = board[r][c];
   if (!piece) return [];
+  const n = board.length;
   const out = [];
   for (const [dr, dc] of DIAGONALS) {
     if (piece.king) {
       // Flying king: slide over empties, hit exactly one enemy, land on any empty square beyond.
       let rr = r + dr, cc = c + dc;
-      while (inBounds(rr, cc) && !board[rr][cc]) { rr += dr; cc += dc; }
-      if (!inBounds(rr, cc) || board[rr][cc].color === piece.color) continue;
+      while (inBounds(rr, cc, n) && !board[rr][cc]) { rr += dr; cc += dc; }
+      if (!inBounds(rr, cc, n) || board[rr][cc].color === piece.color) continue;
       const victim = [rr, cc];
       rr += dr; cc += dc;
-      while (inBounds(rr, cc) && !board[rr][cc]) {
+      while (inBounds(rr, cc, n) && !board[rr][cc]) {
         out.push({ to: [rr, cc], captured: victim });
         rr += dr; cc += dc;
       }
     } else {
       // Man: jumps an adjacent enemy, forward OR backward.
       const mr = r + dr, mc = c + dc, lr = r + 2 * dr, lc = c + 2 * dc;
-      if (!inBounds(lr, lc)) continue;
+      if (!inBounds(lr, lc, n)) continue;
       const mid = board[mr][mc];
       if (mid && mid.color !== piece.color && !board[lr][lc]) {
         out.push({ to: [lr, lc], captured: [mr, mc] });
@@ -88,11 +100,12 @@ export function getCaptures(board, r, c) {
 export function getSimpleMoves(board, r, c) {
   const piece = board[r][c];
   if (!piece) return [];
+  const n = board.length;
   const out = [];
   if (piece.king) {
     for (const [dr, dc] of DIAGONALS) {
       let rr = r + dr, cc = c + dc;
-      while (inBounds(rr, cc) && !board[rr][cc]) {
+      while (inBounds(rr, cc, n) && !board[rr][cc]) {
         out.push({ to: [rr, cc], captured: null });
         rr += dr; cc += dc;
       }
@@ -101,7 +114,7 @@ export function getSimpleMoves(board, r, c) {
     const dr = forwardDir(piece.color);
     for (const dc of [-1, 1]) {
       const rr = r + dr, cc = c + dc;
-      if (inBounds(rr, cc) && !board[rr][cc]) out.push({ to: [rr, cc], captured: null });
+      if (inBounds(rr, cc, n) && !board[rr][cc]) out.push({ to: [rr, cc], captured: null });
     }
   }
   return out;
@@ -110,8 +123,8 @@ export function getSimpleMoves(board, r, c) {
 /** Positions of every piece of `color` that currently has a capture available. */
 export function findCapturers(board, color) {
   const list = [];
-  for (let r = 0; r < SIZE; r++)
-    for (let c = 0; c < SIZE; c++)
+  for (let r = 0; r < board.length; r++)
+    for (let c = 0; c < board.length; c++)
       if (board[r][c]?.color === color && getCaptures(board, r, c).length) list.push([r, c]);
   return list;
 }
@@ -133,8 +146,8 @@ export function getLegalMoves(state, from) {
 }
 
 export function hasAnyMove(board, color) {
-  for (let r = 0; r < SIZE; r++)
-    for (let c = 0; c < SIZE; c++)
+  for (let r = 0; r < board.length; r++)
+    for (let c = 0; c < board.length; c++)
       if (board[r][c]?.color === color &&
           (getCaptures(board, r, c).length || getSimpleMoves(board, r, c).length)) return true;
   return false;
@@ -200,7 +213,7 @@ export function applyMove(state, from, to) {
   };
 
   // Promotion: a man reaching the far row becomes a Dam (king) and the turn ends immediately.
-  const promoted = !piece.king && to[0] === promotionRow(piece.color);
+  const promoted = !piece.king && to[0] === promotionRow(piece.color, board.length);
   if (promoted) piece.king = true;
 
   if (legal.captured) {

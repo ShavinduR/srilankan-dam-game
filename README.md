@@ -1,6 +1,6 @@
 # Dam — Sri Lankan Draughts (Real-time MVP)
 
-12×12 Dam with flying kings, the street **"Blow"** rule, 60s turn timer, nudge (අදින්න),
+12×12 or 10×10 Dam with flying kings, the street **"Blow"** rule, 90s turn timer (warning at 60s), nudge (අදින්න),
 draw/resign, and rematch. React (Vite, PWA) + Node.js/Socket.IO. No database — all rooms live in server memory.
 
 ## Project structure
@@ -74,22 +74,23 @@ Render's free plan sleeps after ~15 min idle; the first match after that can tak
 ## Rules as implemented
 | Rule | Behaviour |
 |---|---|
-| Layout | Black rows 1–4 (top), White rows 9–12 (bottom), 24 each on dark squares. White moves first. |
+| Board size | Chosen on the home screen: **12×12** or **10×10**. Online players are only matched with someone who picked the same size; rematches keep the size. |
+| Layout | Always exactly **2 empty rows** in the middle. 12×12: 5 rows / **30 pieces** each. 10×10: 4 rows / **20 pieces** each. Black on top, White at the bottom; White moves first. |
 | Man | 1 diagonal step forward; captures forward **and** backward. |
 | Multi-jump | After a capture, if the same piece can capture again it **must** continue (other moves locked). |
-| Promotion | Reaching the far row → Dam (king); turn ends immediately, even mid-chain. |
+| Promotion | Reaching the far row (row 1 for White; row 12 or 10 for Black) → Dam (king); turn ends immediately, even mid-chain. |
 | Flying king | Moves any distance; captures one piece at any distance, landing on any empty square beyond. |
 | Mandatory capture | **Not** enforced. If a player had any capture available and made a non-capturing move, every piece that could have captured becomes a Blow candidate. |
 | Blow | Opponent may tap one candidate *before their first move* to remove it, then moves normally. Moving first forfeits the chance. "Blow hints" toggle can hide the highlight for a purist game. |
-| Timer | 60s per turn (multi-jumps share one turn) — timeout = loss. Server-authoritative. |
+| Timer | **90s** per turn (multi-jumps share one turn). At **60s** the player to move sees "You will lose in 30 seconds!" (toast + red countdown, vibrate/beep). At 90s they lose. The server enforces the timeout. |
 | Nudge | Waiting player gets "අදින්න" (nudge) at 30s; once per turn; vibrates + beeps the active player. |
 | Win | Opponent has no pieces / no legal moves, resign, timeout, or disconnect. |
 | Rematch | Both press Play Again → new game in the same room with colours swapped. |
 
 ## Socket events
-Client → server: `findMatch {name}`, `cancelMatch`, `move {from,to}`, `blow {pos}`, `nudge`, `resign`,
+Client → server: `findMatch {name, size}` (size: 12 or 10), `cancelMatch`, `move {from,to}`, `blow {pos}`, `nudge`, `resign`,
 `offerDraw`, `respondDraw {accept}`, `rematch`, `leaveRoom`.
-Server → client: `waiting`, `matchFound {roomId,color,opponent}`, `state {game,players,turnStartedAt,serverNow,…}`,
+Server → client: `waiting`, `matchFound {roomId,color,size,opponent}`, `state {size,game,players,turnStartedAt,serverNow,turnLimitMs,warningAfterMs,…}`,
 `nudged`, `blown`, `drawDeclined`, `opponentLeft`, `errorMsg`.
 
 Each `move` is one step (a simple move or a single jump). The server validates with the same engine and

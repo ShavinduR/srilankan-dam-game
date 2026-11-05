@@ -4,20 +4,21 @@ import GameScreen from './components/GameScreen.jsx';
 import { useLocalGame } from './hooks/useLocalGame.js';
 import { useOnlineGame } from './hooks/useOnlineGame.js';
 
-function LocalGame({ onLeave, toast }) {
-  const ctrl = useLocalGame();
+function LocalGame({ size, onLeave, toast }) {
+  const ctrl = useLocalGame(size);
   return <GameScreen ctrl={ctrl} onLeave={onLeave} toast={toast} />;
 }
 
 export default function App() {
   const [screen, setScreen] = useState('landing'); // landing | local | online
+  const [size, setSize] = useState(12);
   const [toastMsg, setToastMsg] = useState(null);
   const timer = useRef();
 
   const toast = useCallback((text, kind = 'info') => {
     clearTimeout(timer.current);
     setToastMsg({ text, kind, id: Date.now() });
-    timer.current = setTimeout(() => setToastMsg(null), kind === 'nudge' ? 4000 : 2500);
+    timer.current = setTimeout(() => setToastMsg(null), kind === 'nudge' || kind === 'warning' ? 5000 : 2500);
   }, []);
 
   const online = useOnlineGame(toast);
@@ -26,7 +27,7 @@ export default function App() {
 
   let body;
   if (screen === 'local') {
-    body = <LocalGame onLeave={() => setScreen('landing')} toast={toast} />;
+    body = <LocalGame key={size} size={size} onLeave={() => setScreen('landing')} toast={toast} />;
   } else if (screen === 'online' && online.phase === 'playing' && online.ctrl) {
     body = <GameScreen ctrl={online.ctrl} onLeave={leaveOnline} toast={toast} />;
   } else if (screen === 'online') {
@@ -34,6 +35,7 @@ export default function App() {
       <div className="landing">
         <div className="spinner" />
         <h2>Finding an opponent…</h2>
+        <p className="size-badge">{size}×{size} board</p>
         <p className="subtitle">Open this page on another device (or tab) to test.</p>
         <button className="secondary" onClick={leaveOnline}>Cancel</button>
       </div>
@@ -41,8 +43,8 @@ export default function App() {
   } else {
     body = (
       <Landing
-        onFindMatch={(name) => { online.findMatch(name); setScreen('online'); }}
-        onLocal={() => setScreen('local')}
+        onFindMatch={(name, n) => { setSize(n); online.findMatch(name, n); setScreen('online'); }}
+        onLocal={(n) => { setSize(n); setScreen('local'); }}
       />
     );
   }

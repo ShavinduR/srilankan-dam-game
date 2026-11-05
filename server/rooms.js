@@ -1,16 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import {
-  createGame, applyMove, applyBlow, endGame, opponent,
-  WHITE, BLACK, TURN_LIMIT_MS, NUDGE_AFTER_MS,
+  createGame, applyMove, applyBlow, endGame, opponent, isValidSize,
+  WHITE, BLACK, DEFAULT_SIZE, TURN_LIMIT_MS, WARNING_AFTER_MS, NUDGE_AFTER_MS,
 } from '../shared/damEngine.js';
 
 /** In-memory store. Everything is lost on restart — fine for the MVP. */
 export const rooms = new Map();      // roomId -> Room
 export const socketRoom = new Map(); // socketId -> roomId
-let waiting = null;                  // { socketId, name } — single matchmaking queue
+// One matchmaking queue per board size: players only meet someone who chose the same size.
+const waiting = new Map();           // size -> { socketId, name }
 
 const cleanName = (n) => String(n ?? '').trim().slice(0, 20) || 'Guest';
-const validPos = (p) => Array.isArray(p) && p.length === 2 && p.every((n) => Number.isInteger(n) && n >= 0 && n < 12);
+const validPos = (p, size) => Array.isArray(p) && p.length === 2 && p.every((n) => Number.isInteger(n) && n >= 0 && n < size);
+const pickSize = (s) => (isValidSize(Number(s)) ? Number(s) : DEFAULT_SIZE);
+function dequeue(socketId) {
+  for (const [size, w] of waiting) if (w.socketId === socketId) waiting.delete(size);
+}
 
 export function createRoomManager(io) {
   const emitState = (room) => io.to(room.id).emit('state', publicRoom(room));
@@ -23,10 +28,12 @@ export function createRoomManager(io) {
         w: room.players.w && { name: room.players.w.name, connected: room.players.w.connected },
         b: room.players.b && { name: room.players.b.name, connected: room.players.b.connected },
       },
+      size: room.size,
       game: room.game,
       turnStartedAt: room.turnStartedAt,
       serverNow: Date.now(),
       turnLimitMs: TURN_LIMIT_MS,
+      warningAfterMs: WARNING_AFTER_MS,
       nudgeAfterMs: NUDGE_AFTER_MS,
       drawOfferBy: room.drawOfferBy,
       rematchVotes: [...room.rematchVotes],
@@ -60,7 +67,7 @@ export function createRoomManager(io) {
   }
 
   function newMatch(room) {
-    room.game = createGame();
+    room.game = createGame(room.size); // rematch keeps the board size
     room.drawOfferBy = null;
     room.rematchVotes.clear();
     startTurnClock(room);
@@ -75,7 +82,7 @@ export function createRoomManager(io) {
   }
 
   function leave(socket, reason = 'left') {
-    if (waiting?.socketId === socket.id) waiting = null;
+    dequeue(socket.id);
     const roomId = socketRoom.get(socket.id);
     socketRoom.delete(socket.id);
     const room = rooms.get(roomId);
@@ -92,24 +99,27 @@ export function createRoomManager(io) {
   }
 
   return function onConnection(socket) {
-    socket.on('findMatch', ({ name } = {}) => {
+    socket.on('findMatch', ({ name, size } = {}) => {
       if (socketRoom.has(socket.id)) leave(socket);
+      dequeue(socket.id);
+      const boardSize = pickSize(size);
       const me = { socketId: socket.id, name: cleanName(name) };
-      const other = waiting && io.sockets.sockets.get(waiting.socketId);
-      if (!other || waiting.socketId === socket.id) {
-        waiting = me;
-        socket.emit('waiting');
+      const host = waiting.get(boardSize);
+      const other = host && io.sockets.sockets.get(host.socketId);
+      if (!other) {
+        waiting.set(boardSize, me);
+        socket.emit('waiting', { size: boardSize });
         return;
       }
-      const host = waiting;
-      waiting = null;
+      waiting.delete(boardSize);
       const room = {
         id: randomUUID().slice(0, 8),
+        size: boardSize,
         players: {
           w: { ...host, connected: true },  // first in queue plays White (moves first)
           b: { ...me, connected: true },
         },
-        game: createGame(),
+        game: createGame(boardSize),
         timer: null,
         turnStartedAt: Date.now(),
         drawOfferBy: null,
@@ -121,19 +131,17 @@ export function createRoomManager(io) {
         const s = io.sockets.sockets.get(p.socketId);
         s.join(room.id);
         socketRoom.set(p.socketId, room.id);
-        s.emit('matchFound', { roomId: room.id, color, opponent: room.players[opponent(color)].name });
+        s.emit('matchFound', { roomId: room.id, color, size: room.size, opponent: room.players[opponent(color)].name });
       }
       startTurnClock(room);
       emitState(room);
     });
 
-    socket.on('cancelMatch', () => {
-      if (waiting?.socketId === socket.id) waiting = null;
-    });
+    socket.on('cancelMatch', () => dequeue(socket.id));
 
     socket.on('move', ({ from, to } = {}) => {
       const c = ctx(socket);
-      if (!c || !validPos(from) || !validPos(to)) return;
+      if (!c || !validPos(from, c.room.size) || !validPos(to, c.room.size)) return;
       const { room, color } = c;
       if (room.game.turn !== color) return sendError(socket, 'Not your turn.');
       const res = applyMove(room.game, from, to);
@@ -147,7 +155,7 @@ export function createRoomManager(io) {
 
     socket.on('blow', ({ pos } = {}) => {
       const c = ctx(socket);
-      if (!c || !validPos(pos)) return;
+      if (!c || !validPos(pos, c.room.size)) return;
       const { room, color } = c;
       if (room.game.turn !== color) return sendError(socket, 'Not your turn.');
       const res = applyBlow(room.game, pos);
@@ -206,7 +214,7 @@ export function createRoomManager(io) {
         room.players = { w: b, b: w };
         for (const k of [WHITE, BLACK]) {
           io.sockets.sockets.get(room.players[k].socketId)?.emit('matchFound', {
-            roomId: room.id, color: k, opponent: room.players[opponent(k)].name,
+            roomId: room.id, color: k, size: room.size, opponent: room.players[opponent(k)].name,
           });
         }
         return newMatch(room);

@@ -7,10 +7,40 @@ const W = (king = false) => ({ color: 'w', king });
 const B = (king = false) => ({ color: 'b', king });
 const game = (board, turn = 'w') => ({ ...E.createGame(), board, turn });
 
-test('initial layout: 24 pieces each, only dark squares', () => {
-  const g = E.createGame();
-  assert.deepEqual(E.countPieces(g.board), { w: 24, b: 24, wk: 0, bk: 0 });
-  g.board.forEach((row, r) => row.forEach((p, c) => p && assert.ok(E.isDark(r, c))));
+for (const [size, rows, count] of [[12, 5, 30], [10, 4, 20]]) {
+  test(`${size}x${size} layout: ${count} pieces each, ${rows} rows, exactly 2 empty middle rows`, () => {
+    const g = E.createGame(size);
+    assert.equal(g.size, size);
+    assert.equal(g.board.length, size);
+    assert.deepEqual(E.countPieces(g.board), { w: count, b: count, wk: 0, bk: 0 });
+    g.board.forEach((row, r) => row.forEach((p, c) => p && assert.ok(E.isDark(r, c))));
+    const emptyRows = g.board.map((row, r) => (row.every((p) => !p) ? r : -1)).filter((r) => r >= 0);
+    assert.deepEqual(emptyRows, [rows, rows + 1]);
+    assert.ok(g.board.slice(0, rows).flat().filter(Boolean).every((p) => p.color === 'b'));
+    assert.ok(g.board.slice(size - rows).flat().filter(Boolean).every((p) => p.color === 'w'));
+  });
+}
+
+test('default size is 12 and unsupported sizes are rejected', () => {
+  assert.equal(E.createGame().size, 12);
+  assert.throws(() => E.createGame(8));
+});
+
+test('10x10: black promotes on row 9, flying king stops at the 10x10 edge', () => {
+  const b = Array.from({ length: 10 }, () => Array(10).fill(null));
+  b[8][1] = { color: 'b', king: false }; b[5][0] = { color: 'w', king: false };
+  const r = E.applyMove({ ...E.createGame(10), board: b, turn: 'b' }, [8, 1], [9, 2]);
+  assert.equal(r.state.board[9][2].king, true);
+  const k = Array.from({ length: 10 }, () => Array(10).fill(null));
+  k[9][0] = { color: 'w', king: true }; k[0][1] = { color: 'b', king: false };
+  const moves = E.getLegalMoves({ ...E.createGame(10), board: k }, [9, 0]).map((m) => m.to);
+  assert.equal(moves.length, 9); // (8,1) … (0,9)
+  assert.deepEqual(moves.at(-1), [0, 9]);
+});
+
+test('timer constants: 90s limit, warning at 60s', () => {
+  assert.equal(E.TURN_LIMIT_MS, 90_000);
+  assert.equal(E.WARNING_AFTER_MS, 60_000);
 });
 
 test('man moves 1 step forward only', () => {

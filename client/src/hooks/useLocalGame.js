@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createGame, applyMove, applyBlow, endGame, opponent, TURN_LIMIT_MS, NUDGE_AFTER_MS } from '../game/engine.js';
+import {
+  createGame, applyMove, applyBlow, endGame, opponent, TURN_LIMIT_MS, WARNING_AFTER_MS, NUDGE_AFTER_MS,
+} from '../game/engine.js';
 
 /**
  * Pass-and-play on one device. Pure local React state driven by the shared engine.
  * Exposes the same controller shape as useOnlineGame so <GameScreen> doesn't care.
  */
-export function useLocalGame() {
-  const [game, setGame] = useState(createGame);
+export function useLocalGame(size) {
+  const [game, setGame] = useState(() => createGame(size));
   const [turnStartedAt, setTurnStartedAt] = useState(Date.now());
   const [drawOfferBy, setDrawOfferBy] = useState(null);
   const gameRef = useRef(game);
@@ -15,7 +17,7 @@ export function useLocalGame() {
   // Reset the turn clock whenever the side to move changes.
   useEffect(() => setTurnStartedAt(Date.now()), [game.turn, game.winner === null]);
 
-  // 60s forfeit.
+  // 90s forfeit.
   useEffect(() => {
     if (game.winner) return;
     const left = TURN_LIMIT_MS - (Date.now() - turnStartedAt);
@@ -47,6 +49,7 @@ export function useLocalGame() {
     clockOffset: 0,
     nudgeAfterMs: NUDGE_AFTER_MS,
     turnLimitMs: TURN_LIMIT_MS,
+    warningAfterMs: WARNING_AFTER_MS,
     drawOfferBy,
     rematchVotes: [],
     move,
@@ -58,6 +61,6 @@ export function useLocalGame() {
       if (accept) setGame((g) => endGame(g, 'draw', 'draw-agreed'));
       setDrawOfferBy(null);
     },
-    rematch: () => { setGame(createGame()); setDrawOfferBy(null); },
+    rematch: () => { setGame(createGame(size)); setDrawOfferBy(null); },
   };
 }
