@@ -1,0 +1,20 @@
+# Render Blueprint — backend only. The frontend deploys separately on Vercel.
+# No rootDir on purpose: the server imports ../shared/damEngine.js.
+services:
+  - type: web
+    name: dam-server
+    runtime: node
+    plan: free
+    buildCommand: npm --prefix server ci
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - server/**
+        - shared/**
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: CLIENT_ORIGIN
+        sync: false # set in the dashboard, e.g. https://dam-game.vercel.app
