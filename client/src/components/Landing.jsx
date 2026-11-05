@@ -65,6 +65,7 @@ export default function Landing({ onFindMatch, onLocal }) {
           <li>Touch-move: once you tap a target square the move is final. 90s per turn — warning at 60s.</li>
         </ul>
       </details>
+      <a className="privacy-link" href="/privacy.html">Privacy Policy</a>
     </div>
   );
 }

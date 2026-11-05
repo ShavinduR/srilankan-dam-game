@@ -5,3 +5,10 @@ dist/
 .vercel/
 .DS_Store
 *.log
+
+# Android signing keys (from PWABuilder) — NEVER commit these
+*.keystore
+*.jks
+signing-key-info.txt
+*.aab
+*.apk

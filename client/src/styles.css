@@ -52,6 +52,7 @@ button.nudge { background: #f1c40f; animation: pulse 1s infinite; }
 .size-sub { font-size: .75rem; font-weight: 400; opacity: .8; }
 .size-badge { margin: 0; padding: 4px 12px; border-radius: 999px; background: #d4af3733;
   border: 1px solid var(--gold); color: var(--gold); font-weight: 700; }
+.privacy-link { color: var(--text); opacity: .6; font-size: .8rem; }
 .rules { max-width: 420px; text-align: left; opacity: .85; font-size: .9rem; }
 .rules summary { cursor: pointer; text-align: center; }
 .spinner { width: 48px; height: 48px; border-radius: 50%; border: 5px solid #fff2;

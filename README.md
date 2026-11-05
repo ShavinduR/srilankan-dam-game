@@ -3,6 +3,8 @@
 12×12 or 10×10 Dam with flying kings, the street **"Blow"** rule, 90s turn timer (warning at 60s), nudge (අදින්න),
 draw/resign, and rematch. React (Vite, PWA) + Node.js/Socket.IO. No database — all rooms live in server memory.
 
+📱 **Publishing to Google Play:** see [docs/PLAY_STORE_GUIDE.md](docs/PLAY_STORE_GUIDE.md).
+
 ## Project structure
 ```
 dam-game/

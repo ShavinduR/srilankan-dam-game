@@ -1,7 +1,7 @@
 // Minimal service worker: network-first for navigation, cache-first for static assets.
 // Socket.IO traffic is never cached.
-const CACHE = 'dam-v1';
-const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'dam-v2';
+const SHELL = ['/', '/manifest.webmanifest', '/privacy.html', '/icons/icon-any-192.png', '/icons/icon-any-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
