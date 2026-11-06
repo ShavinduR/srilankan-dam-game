@@ -13,7 +13,7 @@ export default function ReactionLayer({ items, viewAs, mode, myColor }) {
         const r = getReaction(item.id);
         if (!r) return null;
         const mine = item.by === viewAs;
-        const who = mode === 'online' && item.by === myColor ? 'You' : item.name;
+        const who = mode !== 'local' && item.by === myColor ? 'You' : item.name;
         return (
           <div key={item.key} className={`reaction-float ${mine ? 'from-bottom' : 'from-top'}`}>
             <span className="rf-emoji">{r.emoji}</span>

@@ -107,3 +107,41 @@ test('capturing the last piece wins', () => {
   const r = E.applyMove(game(b), [6, 5], [4, 3]);
   assert.equal(r.state.winner, 'w');
 });
+
+test('pieces have unique stable ids that survive moves', () => {
+  const g = E.createGame(12);
+  const ids = g.board.flat().filter(Boolean).map((p) => p.id);
+  assert.equal(new Set(ids).size, 60);
+  const id = g.board[7][0].id;
+  const r = E.applyMove(g, [7, 0], [6, 1]);
+  assert.equal(r.state.board[6][1].id, id);
+});
+
+test('draw rule: 25 moves EACH (50 turns) without a capture → draw', () => {
+  const b = empty(); b[11][0] = W(true); b[0][11] = B(true);
+  let s = game(b);
+  // both kings shuffle back and forth along their own edge squares
+  const path = { w: [[11, 0], [10, 1]], b: [[0, 11], [1, 10]] };
+  for (let i = 0; i < E.DRAW_QUIET_TURNS; i++) {
+    assert.equal(s.winner, null, `ended early at turn ${i}`);
+    const [p, q] = path[s.turn];
+    const from = s.board[p[0]][p[1]] ? p : q, to = from === p ? q : p;
+    const r = E.applyMove(s, from, to);
+    assert.ok(r.ok, `turn ${i}`);
+    s = r.state;
+    if (i === E.DRAW_QUIET_TURNS - 2) assert.equal(E.turnsUntilDraw(s), 1);
+  }
+  assert.equal(s.winner, 'draw');
+  assert.equal(s.endReason, 'no-captures');
+});
+
+test('draw counter resets on a capture and on a Blow', () => {
+  const b = empty(); b[6][5] = W(); b[5][4] = B(); b[9][0] = W(); b[0][1] = B(); b[0][9] = B();
+  let s = { ...game(b), quietTurns: 30 };
+  const missed = E.applyMove(s, [9, 0], [8, 1]).state;     // quiet (and misses a capture)
+  assert.equal(missed.quietTurns, 31);
+  const blown = E.applyBlow(missed, [6, 5]).state;         // Black blows → reset
+  assert.equal(blown.quietTurns, 0);
+  const s2 = { ...game(b), quietTurns: 40 };
+  assert.equal(E.applyMove(s2, [6, 5], [4, 3]).state.quietTurns, 0); // capture → reset
+});

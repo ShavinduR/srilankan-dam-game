@@ -17,6 +17,9 @@ export const BLACK = 'b';
 export const TURN_LIMIT_MS = 90_000;     // 1m30s per turn, then the player loses
 export const WARNING_AFTER_MS = 60_000;  // "You will lose in 30 seconds!"
 export const NUDGE_AFTER_MS = 30_000;
+/** Draw rule: 25 moves by EACH player (50 turns in a row) without any capture or Blow. */
+export const DRAW_MOVES_EACH = 25;
+export const DRAW_QUIET_TURNS = DRAW_MOVES_EACH * 2;
 
 const DIAGONALS = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
@@ -35,11 +38,12 @@ export function createInitialBoard(size = DEFAULT_SIZE) {
   if (!isValidSize(size)) throw new Error(`Unsupported board size: ${size}`);
   const rows = rowsPerSide(size);
   const board = Array.from({ length: size }, () => Array(size).fill(null));
+  let id = 0; // stable piece ids let the UI animate a piece gliding between squares
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (!isDark(r, c)) continue;
-      if (r < rows) board[r][c] = { color: BLACK, king: false };
-      else if (r >= size - rows) board[r][c] = { color: WHITE, king: false };
+      if (r < rows) board[r][c] = { id: ++id, color: BLACK, king: false };
+      else if (r >= size - rows) board[r][c] = { id: ++id, color: WHITE, king: false };
     }
   }
   return board;
@@ -58,8 +62,9 @@ export function createGame(size = DEFAULT_SIZE) {
     lastMove: null,         // { from, to, captured: [[r,c]...] }
     lastBlow: null,         // { pos, by }
     moveCount: 0,
+    quietTurns: 0,          // consecutive turns without a capture/Blow (draw rule)
     winner: null,           // 'w' | 'b' | 'draw' | null
-    endReason: null,        // 'no-pieces' | 'no-moves' | 'timeout' | 'resign' | 'draw-agreed' | 'disconnect'
+    endReason: null,        // 'no-pieces' | 'no-moves' | 'timeout' | 'resign' | 'draw-agreed' | 'no-captures' | 'disconnect'
   };
 }
 
@@ -167,9 +172,11 @@ function checkElimination(state, color) {
   return state;
 }
 
-function endTurn(state, blowCandidatesForNext) {
+function endTurn(state, blowCandidatesForNext, captured) {
+  const quietTurns = captured ? 0 : (state.quietTurns ?? 0) + 1;
   const next = {
     ...state,
+    quietTurns,
     turn: opponent(state.turn),
     chainFrom: null,
     hasMovedThisTurn: false,
@@ -177,8 +184,13 @@ function endTurn(state, blowCandidatesForNext) {
     blowUsed: false,
     capturersAtStart: null,
   };
-  return checkElimination(next, next.turn);
+  const s = checkElimination(next, next.turn);
+  if (!s.winner && quietTurns >= DRAW_QUIET_TURNS) return { ...s, winner: 'draw', endReason: 'no-captures' };
+  return s;
 }
+
+/** Turns left before the automatic draw (for the UI countdown). */
+export const turnsUntilDraw = (state) => Math.max(0, DRAW_QUIET_TURNS - (state.quietTurns ?? 0));
 
 /**
  * Apply one step (a simple move OR a single jump). Returns { ok, state, error, turnEnded }.
@@ -221,12 +233,12 @@ export function applyMove(state, from, to) {
       s = { ...s, chainFrom: to }; // must continue jumping
       return { ok: true, state: checkElimination(s, opponent(s.turn)), turnEnded: false };
     }
-    return { ok: true, state: endTurn(s, []), turnEnded: true };
+    return { ok: true, state: endTurn(s, [], true), turnEnded: true };
   }
 
   // Non-capturing move. Did the player ignore an available capture? → opponent may Blow.
   const missed = capturersAtStart.map((p) => (samePos(p, from) ? to : p));
-  return { ok: true, state: endTurn(s, missed), turnEnded: true };
+  return { ok: true, state: endTurn(s, missed, s.blowUsed), turnEnded: true };
 }
 
 /** Current player removes ("blows") an opponent piece that missed a capture last turn. */
@@ -236,7 +248,7 @@ export function applyBlow(state, pos) {
   if (!state.blowCandidates.some((p) => samePos(p, pos))) return { ok: false, error: 'That piece cannot be blown.' };
   const board = cloneBoard(state.board);
   board[pos[0]][pos[1]] = null;
-  let s = { ...state, board, blowUsed: true, blowCandidates: [], lastBlow: { pos, by: state.turn } };
+  let s = { ...state, board, blowUsed: true, blowCandidates: [], quietTurns: 0, lastBlow: { pos, by: state.turn } };
   s = checkElimination(s, opponent(state.turn));
   if (!s.winner) s = checkElimination(s, s.turn); // edge case: we may now be stuck
   return { ok: true, state: s };

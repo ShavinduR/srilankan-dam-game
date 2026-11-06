@@ -7,6 +7,6 @@
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
     "start": "npm --prefix server start",
-    "test": "node --test shared/damEngine.test.js shared/reactions.test.js"
+    "test": "node --test \"shared/*.test.js\""
   }
 }

@@ -7,26 +7,31 @@ draw/resign, and rematch. React (Vite, PWA) + Node.js/Socket.IO. No database —
 
 ## Project structure
 ```
-dam-game/
-├── shared/
-│   ├── damEngine.js        # Pure rules engine (used by client AND server)
-│   └── damEngine.test.js   # node --test unit tests
+├── shared/                     # used by BOTH client and server
+│   ├── damEngine.js            # Rules engine (board sizes, Blow rule, draw rule, piece ids)
+│   ├── ai.js                   # Computer opponent (easy / medium / hard)
+│   ├── reactions.js            # Quick-chat reaction whitelist
+│   └── *.test.js               # node --test unit tests (npm test)
 ├── server/
-│   ├── index.js            # Express + Socket.IO bootstrap, serves client/dist in prod
-│   └── rooms.js            # Matchmaking queue, rooms, timers, all socket events
-└── client/
-    ├── index.html          # PWA meta tags
-    ├── vite.config.js      # dev proxy /socket.io -> :3001
-    ├── public/             # manifest.webmanifest, sw.js, icons
-    └── src/
-        ├── App.jsx                 # landing / waiting / game routing + toasts
-        ├── socket.js
-        ├── game/engine.js          # re-exports ../../shared/damEngine.js
-        ├── game/feedback.js        # beep + vibrate
-        ├── hooks/useLocalGame.js   # pass & play (local state)
-        ├── hooks/useOnlineGame.js  # socket controller (optimistic + server-authoritative)
-        ├── hooks/useTurnClock.js
-        └── components/{Landing,GameScreen,Board}.jsx
+│   ├── index.js                # Express + Socket.IO bootstrap, CORS, /health
+│   └── rooms.js                # Matchmaking, private rooms, reconnection grace, timers, all socket events
+├── client/
+│   ├── public/                 # manifest, sw.js, icons, sounds/, privacy.html
+│   └── src/
+│       ├── App.jsx                     # screen routing, ?room= invite links, toasts
+│       ├── socket.js                   # Socket.IO client + per-tab playerId
+│       ├── game/audio.js               # SFX, music, mute
+│       ├── game/stats.js               # localStorage lifetime stats
+│       ├── game/aiClient.js, aiWorker.js  # runs the AI in a Web Worker
+│       ├── hooks/useOnlineGame.js      # online controller (search, rooms, resume)
+│       ├── hooks/useLocalGame.js       # Pass & Play + vs Computer controller
+│       └── components/
+│           ├── Landing.jsx, ProfileCard.jsx       # home screen + player stats
+│           ├── SearchingScreen.jsx, LobbyScreen.jsx  # matchmaking wait (20s AI offer), room code + WhatsApp share
+│           ├── GameScreen.jsx, Board.jsx          # game UI; animated piece layer
+│           └── ReactionBar.jsx, ReactionLayer.jsx, MuteButton.jsx
+├── tools/make_sounds.py        # regenerates the default sound files
+└── docs/PLAY_STORE_GUIDE.md
 ```
 
 ## Run
@@ -76,6 +81,8 @@ Render's free plan sleeps after ~15 min idle; the first match after that can tak
 ## Rules as implemented
 | Rule | Behaviour |
 |---|---|
+| Game modes | **Find Match** (online, random opponent) · **vs Computer** (Easy / Medium / Hard, runs on the device in a Web Worker) · **Play with a Friend** (private room code `DAM-4821` + WhatsApp invite link `/?room=DAM-4821`) · **Pass & Play**. If nobody is found within 20s the player is offered a game vs the computer. |
+| Computer AI | `shared/ai.js`. Easy: random-ish and **skips an available capture ~40% of the time** (teaches the Blow rule, with a tip the first 3 times). Medium: 2-ply search + noise. Hard: iterative-deepening alpha-beta (~0.8s budget). All levels Blow when they can (Easy only half the time). |
 | Board size | Chosen on the home screen: **12×12** or **10×10**. Online players are only matched with someone who picked the same size; rematches keep the size. |
 | Layout | Always exactly **2 empty rows** in the middle. 12×12: 5 rows / **30 pieces** each. 10×10: 4 rows / **20 pieces** each. Black on top, White at the bottom; White moves first. |
 | Man | 1 diagonal step forward; captures forward **and** backward. |
@@ -88,13 +95,18 @@ Render's free plan sleeps after ~15 min idle; the first match after that can tak
 | Quick reactions | 😂 හූ.. හූ.. · 🤔 ඇයි බයද? · 🤦‍♂️ අයියෝ · 😎 එළකිරි — shown as a floating bubble on both screens (1.5s cooldown, enforced by the server). Also available on the game-over screen. |
 | Sound | Wooden move/capture sounds for every move (and Blows), looping background music during a game, global 🔊/🔇 Mute (remembered per device). Replace `client/public/sounds/{move,capture,bgm}.mp3` with your own files of the same name; `python3 tools/make_sounds.py` regenerates the defaults. |
 | Nudge | Waiting player gets "අදින්න" (nudge) at 30s; once per turn; vibrates + beeps the active player. |
-| Win | Opponent has no pieces / no legal moves, resign, timeout, or disconnect. |
+| Win | Opponent has no pieces / no legal moves, resign, timeout, leaves, or doesn't reconnect within 60s. |
+| Draw | Agreed, or automatically after **25 moves each (50 turns) without any capture or Blow** (`DRAW_MOVES_EACH` in `shared/damEngine.js`). A countdown shows for the last 10 turns. |
+| Reconnection | A dropped connection is not a loss: the clock pauses, the opponent sees "Opponent reconnecting… 0:59", and the player has **60s** to come back (network blip or page reload) and resume. Pressing Leave is an immediate loss. |
+| Stats | Played / wins / losses / draws / win-rate / streaks stored in `localStorage` (no database) and shown on the home screen profile card. Online + vs-computer games count. |
+| Animations | Pieces glide (180ms), captured pieces fade out, golden flash on promotion to Dam. Respects `prefers-reduced-motion`. |
 | Rematch | Both press Play Again → new game in the same room with colours swapped. |
 
 ## Socket events
-Client → server: `findMatch {name, size}` (size: 12 or 10), `cancelMatch`, `move {from,to}`, `blow {pos}`, `nudge`, `resign`,
+Handshake: `auth: { playerId }` (random per browser tab, kept in `sessionStorage`; lets a reconnecting player reclaim their seat).
+Client → server: `findMatch {name, size}` (size: 12 or 10), `cancelMatch`, `createRoom {name, size}`, `joinRoom {name, code}`, `move {from,to}`, `blow {pos}`, `nudge`, `resign`,
 `offerDraw`, `respondDraw {accept}`, `reaction {id}`, `rematch`, `leaveRoom`.
-Server → client: `waiting`, `matchFound {roomId,color,size,opponent}`, `state {size,game,players,turnStartedAt,serverNow,turnLimitMs,warningAfterMs,…}`,
+Server → client: `waiting`, `roomCreated {code,size}`, `joinError {message}`, `roomExpired`, `opponentReconnected`, `sessionReplaced`, `matchFound {roomId,color,size,opponent}`, `state {size,code,gameNo,game,players{name,connected,graceEndsAt},turnStartedAt,pausedAt,serverNow,turnLimitMs,warningAfterMs,…}`,
 `nudged`, `blown`, `reaction {id,by,name,at}`, `drawDeclined`, `opponentLeft`, `errorMsg`.
 
 Each `move` is one step (a simple move or a single jump). The server validates with the same engine and
