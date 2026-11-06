@@ -3,6 +3,7 @@ import {
   createGame, applyMove, applyBlow, endGame, opponent, isValidSize,
   WHITE, BLACK, DEFAULT_SIZE, TURN_LIMIT_MS, WARNING_AFTER_MS, NUDGE_AFTER_MS,
 } from '../shared/damEngine.js';
+import { getReaction, REACTION_COOLDOWN_MS } from '../shared/reactions.js';
 
 /** In-memory store. Everything is lost on restart — fine for the MVP. */
 export const rooms = new Map();      // roomId -> Room
@@ -174,6 +175,19 @@ export function createRoomManager(io) {
       if (Date.now() - room.turnStartedAt < NUDGE_AFTER_MS) return;
       room.nudgedThisTurn = true;
       io.to(room.id).emit('nudged', { by: color });
+    });
+
+    // Quick-chat reaction: relayed to BOTH players (sender included) so both screens show it.
+    socket.on('reaction', ({ id } = {}) => {
+      const c = ctx(socket);
+      const reaction = getReaction(id);
+      if (!c || !c.color || !reaction) return;
+      const now = Date.now();
+      if (now - (socket.data.lastReactionAt || 0) < REACTION_COOLDOWN_MS) return; // anti-spam
+      socket.data.lastReactionAt = now;
+      io.to(c.room.id).emit('reaction', {
+        id: reaction.id, by: c.color, name: c.room.players[c.color].name, at: now,
+      });
     });
 
     socket.on('resign', () => {

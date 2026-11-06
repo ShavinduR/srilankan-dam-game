@@ -84,16 +84,18 @@ Render's free plan sleeps after ~15 min idle; the first match after that can tak
 | Flying king | Moves any distance; captures one piece at any distance, landing on any empty square beyond. |
 | Mandatory capture | **Not** enforced. If a player had any capture available and made a non-capturing move, every piece that could have captured becomes a Blow candidate. |
 | Blow | Opponent may tap one candidate *before their first move* to remove it, then moves normally. Moving first forfeits the chance. "Blow hints" toggle can hide the highlight for a purist game. |
-| Timer | **90s** per turn (multi-jumps share one turn). At **60s** the player to move sees "You will lose in 30 seconds!" (toast + red countdown, vibrate/beep). At 90s they lose. The server enforces the timeout. |
+| Timer | **90s** per turn (multi-jumps share one turn). At **60s** the player to move sees "තව තත්පර 30කින් ඔබ පරාජය වේ!" (toast + red countdown, vibrate/beep). At 90s they lose. The server enforces the timeout. |
+| Quick reactions | 😂 හූ.. හූ.. · 🤔 ඇයි බයද? · 🤦‍♂️ අයියෝ · 😎 එළකිරි — shown as a floating bubble on both screens (1.5s cooldown, enforced by the server). Also available on the game-over screen. |
+| Sound | Wooden move/capture sounds for every move (and Blows), looping background music during a game, global 🔊/🔇 Mute (remembered per device). Replace `client/public/sounds/{move,capture,bgm}.mp3` with your own files of the same name; `python3 tools/make_sounds.py` regenerates the defaults. |
 | Nudge | Waiting player gets "අදින්න" (nudge) at 30s; once per turn; vibrates + beeps the active player. |
 | Win | Opponent has no pieces / no legal moves, resign, timeout, or disconnect. |
 | Rematch | Both press Play Again → new game in the same room with colours swapped. |
 
 ## Socket events
 Client → server: `findMatch {name, size}` (size: 12 or 10), `cancelMatch`, `move {from,to}`, `blow {pos}`, `nudge`, `resign`,
-`offerDraw`, `respondDraw {accept}`, `rematch`, `leaveRoom`.
+`offerDraw`, `respondDraw {accept}`, `reaction {id}`, `rematch`, `leaveRoom`.
 Server → client: `waiting`, `matchFound {roomId,color,size,opponent}`, `state {size,game,players,turnStartedAt,serverNow,turnLimitMs,warningAfterMs,…}`,
-`nudged`, `blown`, `drawDeclined`, `opponentLeft`, `errorMsg`.
+`nudged`, `blown`, `reaction {id,by,name,at}`, `drawDeclined`, `opponentLeft`, `errorMsg`.
 
 Each `move` is one step (a simple move or a single jump). The server validates with the same engine and
 rebroadcasts the full state, so a tampered client can never make an illegal move.

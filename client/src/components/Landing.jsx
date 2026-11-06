@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BOARD_SIZES, DEFAULT_SIZE, rowsPerSide } from '../game/engine.js';
+import MuteButton from './MuteButton.jsx';
 
 const piecesPerSide = (n) => rowsPerSide(n) * (n / 2);
 
@@ -19,6 +20,7 @@ export default function Landing({ onFindMatch, onLocal }) {
   };
   return (
     <div className="landing">
+      <MuteButton className="corner" />
       <div className="logo">
         <div className="mini-piece black big" /><div className="mini-piece white big" />
       </div>
@@ -63,6 +65,8 @@ export default function Landing({ onFindMatch, onLocal }) {
           <li><b>Blow rule:</b> captures aren't forced. If your opponent skips one, tap that piece <i>before</i> you move to remove it.</li>
           <li>12×12: 30 pieces each (5 rows). 10×10: 20 pieces each (4 rows). Two empty rows in the middle.</li>
           <li>Touch-move: once you tap a target square the move is final. 90s per turn — warning at 60s.</li>
+          <li>Tease your opponent with quick reactions: 😂 හූ.. හූ.. · 🤔 ඇයි බයද? · 🤦‍♂️ අයියෝ · 😎 එළකිරි</li>
+          <li>🔊 / 🔇 turns music and sound effects on or off.</li>
         </ul>
       </details>
       <a className="privacy-link" href="/privacy.html">Privacy Policy</a>

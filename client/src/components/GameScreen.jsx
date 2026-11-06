@@ -3,6 +3,12 @@ import Board from './Board.jsx';
 import { getLegalMoves, countPieces, samePos } from '../game/engine.js';
 import { useTurnClock } from '../hooks/useTurnClock.js';
 import { beep, vibrate } from '../game/feedback.js';
+import { playSfx, startMusic, stopMusic } from '../game/audio.js';
+import MuteButton from './MuteButton.jsx';
+import ReactionBar from './ReactionBar.jsx';
+import ReactionLayer from './ReactionLayer.jsx';
+
+const WARNING_SI = (secs) => `තව තත්පර ${secs}කින් ඔබ පරාජය වේ!`; // "You will lose in N seconds!"
 
 const NAME = { w: 'White', b: 'Black' };
 const REASON = {
@@ -33,6 +39,11 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
   useEffect(() => setNudgeSent(false), [ctrl.turnStartedAt]);
   useEffect(() => { if (isMyTurn && mode === 'online') beep(740, 80); }, [isMyTurn, mode]);
 
+  // 🎵 Background music: loops while the game is in progress.
+  const gameOver = !!game.winner;
+  useEffect(() => { if (gameOver) stopMusic(); else startMusic(); }, [gameOver]);
+  useEffect(() => () => stopMusic(), []);
+
   const elapsed = useTurnClock(ctrl.turnStartedAt, ctrl.clockOffset, !game.winner);
   const remaining = Math.max(0, Math.ceil((ctrl.turnLimitMs - elapsed) / 1000));
   const pct = Math.max(0, 100 - (elapsed / ctrl.turnLimitMs) * 100);
@@ -45,7 +56,7 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
     if (!showMyWarning || warnedTurn.current === ctrl.turnStartedAt) return;
     warnedTurn.current = ctrl.turnStartedAt;
     const who = mode === 'local' ? `${NAME[game.turn]}: ` : '';
-    toast(`⚠️ ${who}You will lose in 30 seconds!`, 'warning');
+    toast(`⚠️ ${who}${WARNING_SI(30)}`, 'warning');
     vibrate([300, 100, 300]);
     beep(440, 300);
   }, [showMyWarning, ctrl.turnStartedAt, mode, game.turn, toast]);
@@ -53,6 +64,17 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
   const moveTargets = useMemo(() => (selected && isMyTurn ? getLegalMoves(game, selected) : []), [game, selected, isMyTurn]);
   const blowTargets = isMyTurn && !game.hasMovedThisTurn && !game.blowUsed ? game.blowCandidates : [];
   const counts = countPieces(game.board);
+
+  // 🔊 Move / capture sounds for EVERY move on the board (mine and the opponent's).
+  // Keyed on moveCount + piece total so the server echo of an optimistic move doesn't play twice.
+  const totalPieces = counts.w + counts.b;
+  const soundRef = useRef({ moveCount: game.moveCount, pieces: totalPieces });
+  useEffect(() => {
+    const prev = soundRef.current;
+    if (game.moveCount > prev.moveCount) playSfx(totalPieces < prev.pieces ? 'capture' : 'move');
+    else if (game.moveCount === prev.moveCount && totalPieces < prev.pieces) playSfx('capture'); // a Blow
+    soundRef.current = { moveCount: game.moveCount, pieces: totalPieces };
+  }, [game.moveCount, totalPieces]);
 
   function onSquareClick(r, c) {
     if (!isMyTurn) return;
@@ -70,7 +92,6 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
     if (target && selected) {
       const res = ctrl.move(selected, pos);
       if (res.ok) {
-        beep(target.captured ? 330 : 600, 60);
         setSelected(res.state.chainFrom && !res.turnEnded ? res.state.chainFrom : null);
       }
       return;
@@ -123,17 +144,20 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
       <header className="topbar">
         <button className="link" onClick={onLeave}>← Leave</button>
         <span className="title">DAM · {game.board.length}×{game.board.length}{mode === 'local' && ' · Local'}</span>
-        <label className="toggle" title="Highlight pieces you can Blow">
-          <input type="checkbox" checked={showBlowHints} onChange={(e) => setShowBlowHints(e.target.checked)} />
-          Blow hints
-        </label>
+        <div className="topbar-right">
+          <label className="toggle" title="Highlight pieces you can Blow">
+            <input type="checkbox" checked={showBlowHints} onChange={(e) => setShowBlowHints(e.target.checked)} />
+            Blow hints
+          </label>
+          <MuteButton />
+        </div>
       </header>
 
       {renderPlayerBar(oppColor)}
 
       <div className={`status ${showMyWarning ? 'warning' : ''}`}>
         {game.winner ? 'Game over' :
-          showMyWarning ? `⚠️ You will lose in ${remaining} second${remaining === 1 ? '' : 's'}! Make your move.` :
+          showMyWarning ? `⚠️ ${WARNING_SI(remaining)}` :
           game.chainFrom && isMyTurn ? '⚡ Keep jumping — multi-capture in progress!' :
           isMyTurn ? (blowTargets.length && showBlowHints ? '💨 Opponent missed a capture — tap the red piece to BLOW it, or just move.' : `${mode === 'local' ? NAME[game.turn] + "'s" : 'Your'} turn`) :
           `Waiting for ${players[game.turn]?.name ?? NAME[game.turn]}…`}
@@ -150,6 +174,8 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
       />
 
       {renderPlayerBar(viewAs, true)}
+
+      <ReactionBar onReact={ctrl.react} />
 
       {incomingDraw && !game.winner && (
         <div className="banner">
@@ -194,9 +220,12 @@ export default function GameScreen({ ctrl, onLeave, toast }) {
               <p className="hint">Opponent wants a rematch!</p>
             )}
             <button className="secondary" onClick={onLeave}>Back to lobby</button>
+            <ReactionBar onReact={ctrl.react} compact />
           </div>
         </div>
       )}
+
+      <ReactionLayer items={ctrl.reactions} viewAs={viewAs} mode={mode} myColor={myColor} />
     </div>
   );
 }

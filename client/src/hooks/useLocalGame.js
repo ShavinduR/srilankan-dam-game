@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useReactionFeed } from './useReactionFeed.js';
+import { beep } from '../game/feedback.js';
 import {
   createGame, applyMove, applyBlow, endGame, opponent, TURN_LIMIT_MS, WARNING_AFTER_MS, NUDGE_AFTER_MS,
 } from '../game/engine.js';
@@ -11,6 +13,7 @@ export function useLocalGame(size) {
   const [game, setGame] = useState(() => createGame(size));
   const [turnStartedAt, setTurnStartedAt] = useState(Date.now());
   const [drawOfferBy, setDrawOfferBy] = useState(null);
+  const [reactions, pushReaction] = useReactionFeed();
   const gameRef = useRef(game);
   gameRef.current = game;
 
@@ -55,6 +58,13 @@ export function useLocalGame(size) {
     move,
     blow,
     nudge: () => {},
+    reactions,
+    // Pass & Play: the reaction is "said" by whoever is to move.
+    react: (id) => {
+      const by = gameRef.current.turn;
+      pushReaction({ id, by, name: by === 'w' ? 'White' : 'Black', at: Date.now() });
+      beep(880, 50, 0.05);
+    },
     resign: () => setGame((g) => endGame(g, opponent(g.turn), 'resign')),
     offerDraw: () => setDrawOfferBy(gameRef.current.turn),
     respondDraw: (accept) => {

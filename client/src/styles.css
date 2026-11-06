@@ -8,7 +8,7 @@
   --text: #f6ead2;
   --accent: #e0a040;
   --danger: #c0392b;
-  --board: min(96vw, calc(100dvh - 260px), 640px);
+  --board: min(96vw, calc(100dvh - 330px), 640px);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Sinhala', 'Iskoola Pota', 'Sinhala Sangam MN', sans-serif;
   color: var(--text);
   -webkit-tap-highlight-color: transparent;
@@ -150,3 +150,45 @@ button.nudge { background: #f1c40f; animation: pulse 1s infinite; }
 @keyframes blow { 0%,100% { box-shadow: 0 0 0 3px #ff3b3b, 0 0 6px #ff3b3b; }
   50% { box-shadow: 0 0 0 5px #ff3b3b, 0 0 18px #ff3b3b; } }
 @keyframes shake { 25% { transform: translateX(calc(-50% - 8px)); } 75% { transform: translateX(calc(-50% + 8px)); } }
+
+/* ---------- Audio: mute button ---------- */
+.topbar-right { display: flex; align-items: center; gap: 6px; }
+.mute-btn { background: #0004; color: var(--text); border: 1px solid #fff2; border-radius: 999px;
+  width: 38px; height: 38px; padding: 0; font-size: 1.15rem; line-height: 1; flex: none; }
+.mute-btn.is-muted { background: #7a1f1f; border-color: #ff8a8a55; }
+.mute-btn.corner { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 5; }
+
+/* ---------- Quick reactions ---------- */
+.reaction-bar { width: var(--board); display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.reaction-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px;
+  background: #0003; color: var(--text); border: 1px solid #fff2; border-radius: 12px; min-width: 0; }
+.reaction-btn:disabled { opacity: .45; }
+.r-emoji { font-size: 1.35rem; line-height: 1.1; }
+.r-text { font-size: .72rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.reaction-bar.compact { width: 100%; margin-top: 6px; }
+.reaction-bar.compact .r-text { display: none; }
+.reaction-bar.compact .reaction-btn { padding: 6px 0; }
+
+.reaction-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+.reaction-float { position: absolute; left: 50%; display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px 8px 10px; border-radius: 999px; background: #fffbea; color: #2a1810;
+  border: 3px solid var(--gold); box-shadow: 0 8px 24px #000a; white-space: nowrap; }
+.reaction-float.from-bottom { bottom: 22%; animation: float-up 2.8s ease-out forwards; }
+.reaction-float.from-top { top: 14%; animation: float-down 2.8s ease-out forwards; }
+.rf-emoji { font-size: 2.2rem; line-height: 1; }
+.rf-body { display: flex; flex-direction: column; line-height: 1.2; }
+.rf-name { font-size: .72rem; font-weight: 700; opacity: .65; }
+.rf-text { font-size: 1.2rem; font-weight: 800; }
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(-50%, 30px) scale(.6); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -70px) scale(.95); } }
+@keyframes float-down {
+  0% { opacity: 0; transform: translate(-50%, -30px) scale(.6); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, 50px) scale(.95); } }

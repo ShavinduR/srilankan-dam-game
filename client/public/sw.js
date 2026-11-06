@@ -1,6 +1,6 @@
 // Minimal service worker: network-first for navigation, cache-first for static assets.
 // Socket.IO traffic is never cached.
-const CACHE = 'dam-v2';
+const CACHE = 'dam-v3';
 const SHELL = ['/', '/manifest.webmanifest', '/privacy.html', '/icons/icon-any-192.png', '/icons/icon-any-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -16,6 +16,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.pathname.startsWith('/socket.io')) return;
+  // Let the browser stream media itself (music uses Range requests → 206 responses can't be cached).
+  if (e.request.headers.has('range') || url.pathname.startsWith('/sounds/bgm')) return;
   if (e.request.mode === 'navigate') {
     e.respondWith(fetch(e.request).catch(() => caches.match('/')));
     return;

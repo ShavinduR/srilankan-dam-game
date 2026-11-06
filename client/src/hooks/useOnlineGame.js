@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { socket } from '../socket.js';
 import { applyMove, applyBlow } from '../game/engine.js';
 import { beep, vibrate } from '../game/feedback.js';
+import { useReactionFeed } from './useReactionFeed.js';
 
 /**
  * Online controller. The SERVER is authoritative; we apply moves optimistically
@@ -16,6 +17,7 @@ export function useOnlineGame(onToast) {
   roomRef.current = room;
   const toast = useRef(onToast);
   toast.current = onToast;
+  const [reactions, pushReaction] = useReactionFeed();
 
   useEffect(() => {
     const handlers = {
@@ -27,7 +29,8 @@ export function useOnlineGame(onToast) {
         toast.current?.('👉 අදින්න! Your opponent is waiting — make your move!', 'nudge');
         vibrate([200, 100, 200]); beep(520, 250);
       },
-      blown: () => { vibrate(150); beep(220, 200); },
+      blown: () => vibrate(150), // the capture sound is played by GameScreen
+      reaction: (r) => { pushReaction(r); beep(880, 50, 0.05); },
       drawDeclined: () => toast.current?.('Draw offer declined.'),
       opponentLeft: () => toast.current?.('Opponent left the room.'),
       errorMsg: (m) => toast.current?.(m, 'error'),
@@ -35,7 +38,7 @@ export function useOnlineGame(onToast) {
     };
     for (const [e, h] of Object.entries(handlers)) socket.on(e, h);
     return () => { for (const [e, h] of Object.entries(handlers)) socket.off(e, h); };
-  }, []);
+  }, [pushReaction]);
 
   const findMatch = useCallback((name, size) => {
     if (!socket.connected) socket.connect();
@@ -79,6 +82,8 @@ export function useOnlineGame(onToast) {
       return res;
     },
     nudge: () => socket.emit('nudge'),
+    reactions,
+    react: (id) => socket.emit('reaction', { id }), // server echoes it to both players
     resign: () => socket.emit('resign'),
     offerDraw: () => socket.emit('offerDraw'),
     respondDraw: (accept) => socket.emit('respondDraw', { accept }),

@@ -151,6 +151,11 @@ Captures aren't forced — but if your opponent misses one, tap their piece befo
 ⏱ FAST, FAIR GAMES
 • 90 seconds per move, with a warning at 60 seconds
 • "අදින්න" nudge button to hurry up a slow opponent
+
+😂 TEASE YOUR OPPONENT
+Quick reactions: හූ.. හූ.. · ඇයි බයද? · අයියෝ · එළකිරි
+
+🔊 Wooden sound effects and upbeat music (one-tap mute)
 • Offer a draw, resign, or hit Play Again for a rematch
 
 👥 TWO WAYS TO PLAY
